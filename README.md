@@ -33,11 +33,11 @@ To install without git, [download the source code from GitHub](https://github.co
 ### Additional Options
 
     usage: export_saved.py [-h] [-u USERNAME] [-p PASSWORD] [-id CLIENT_ID]
-                            [-s CLIENT_SECRET] [-v] [-up] [-all]
-
+                           [-s CLIENT_SECRET] [-v] [-up] [-all] [-tags]
+    
     Exports saved Reddit posts into a HTML file that is ready to be imported into
     Google Chrome or Firefox
-
+    
     optional arguments:
       -h, --help            show this help message and exit
       -u USERNAME, --username USERNAME
@@ -51,6 +51,7 @@ To install without git, [download the source code from GitHub](https://github.co
       -v, --verbose         increase output verbosity
       -up, --upvoted        get upvoted posts instead of saved posts
       -all, --all           get upvoted, saved, comments and submissions
+      -tags, --tags         include user and subreddit as tags in the html
 
 ## Updating
 To update the script to the latest version, enter the `export-saved-reddit` folder in your shell/command prompt and enter the following:

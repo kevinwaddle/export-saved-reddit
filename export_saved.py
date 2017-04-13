@@ -15,6 +15,7 @@ import sys
 import praw
 
 
+WITH_TAGS=False
 # # Converter class from https://gist.github.com/raphaa/1327761
 class Converter():
     """Converts a CSV instapaper export to a Chrome bookmark file."""
@@ -38,7 +39,10 @@ class Converter():
                 folder = url[4].strip()
             if folder not in list(parsed_urls.keys()):
                 parsed_urls[folder] = []
-            parsed_urls[folder].append([url[0], url[1], url[2]])
+            tags = []
+            if WITH_TAGS:
+                tags = [self._folder_name.replace(' ', ''), 'u/' + url[5], 'r/' + folder]
+            parsed_urls[folder].append([url[0], url[1], url[2], tags])
         return parsed_urls
 
     def convert(self):
@@ -55,10 +59,13 @@ class Converter():
         for folder in sorted(list(urls.keys())):
             content += ('<DT><H3 ADD_DATE="%(t)d" LAST_MODIFIED="%(t)d">%(n)s'
                         '</H3>\n<DL><P>\n' % {'t': t, 'n': folder})
-            for url, title, add_date in urls[folder]:
+            for url, title, add_date, tags in urls[folder]:
                 content += ('<DT><A HREF="%(url)s" ADD_DATE="%(created)d"'
-                            ' LAST_MODIFIED="%(created)d">%(title)s</A>\n'
-                            % {'url': url, 'created': int(add_date), 'title': title})
+                            ' LAST_MODIFIED="%(created)d" TAGS="%(tags)s">%(title)s</A>\n'
+                            % {'url': url,
+                               'created': int(add_date),
+                               'title': title,
+                               'tags': ','.join(tags)})
             content += '</DL><P>\n'
         content += '</DL><P>\n' * 3
         ifile = open(self._html_file, 'w')
@@ -91,6 +98,8 @@ def get_args(argv):
     parser.add_argument("-up", "--upvoted", help="get upvoted posts instead of saved posts",
                         action="store_true")
     parser.add_argument("-all", "--all", help="get upvoted, saved, comments and submissions",
+                        action="store_true")
+    parser.add_argument("-tags", "--tags", help="include user and subreddit as tags in the html",
                         action="store_true")
 
     args = parser.parse_args(argv)
@@ -182,15 +191,25 @@ def get_csv_rows(reddit, seq):
     csv_rows = []
     reddit_url = reddit.config.reddit_url
 
+    def encode_decode(i, field):
+        # Fix possible buggy utf-8
+        try:
+            out = str(getattr(i, field)).encode('utf-8').decode('utf-8')
+        except Exception:
+            out = "None"
+        return out
+
     # filter items for link
     for idx, i in enumerate(seq, 1):
         logging.debug('processing item #{}'.format(idx))
 
+        if callable(i.permalink):
+            i.permalink = i.permalink()
+        permalink = encode_decode(i, 'permalink')
+
         if not hasattr(i, 'title'):
             i.title = i.link_title
-
-        # Fix possible buggy utf-8
-        title = i.title.encode('utf-8').decode('utf-8')
+        title = encode_decode(i, 'title')
         logging.debug('title: {}'.format(title))
 
         try:
@@ -198,18 +217,11 @@ def get_csv_rows(reddit, seq):
         except ValueError:
             created = 0
 
-        try:
-            folder = str(i.subreddit).encode('utf-8').decode('utf-8')
-        except AttributeError:
-            folder = "None"
+        folder = encode_decode(i, 'subreddit')
 
-        if callable(i.permalink):
-            permalink = i.permalink()
-        else:
-            permalink = i.permalink
-        permalink = permalink.encode('utf-8').decode('utf-8')
+        author = encode_decode(i, 'author')
 
-        csv_rows.append([reddit_url + permalink, title, created, None, folder])
+        csv_rows.append([reddit_url + permalink, title, created, None, folder, author])
 
     return csv_rows
 
@@ -224,7 +236,7 @@ def write_csv(csv_rows, file_name=None):
     file_name = file_name if file_name is not None else 'export-saved.csv'
 
     # csv setting
-    csv_fields = ['URL', 'Title', 'Created', 'Selection', 'Folder']
+    csv_fields = ['URL', 'Title', 'Created', 'Selection', 'Folder', 'Author']
     delimiter = ','
 
     # write csv using csv module
@@ -278,11 +290,11 @@ def save_submissions(reddit):
     seq = reddit.user.me().submissions.new(limit=None)
     process(reddit, seq, "export-submissions", "Reddit - Submissions")
 
-
 def main():
     """main func."""
     args = get_args(sys.argv[1:])
-
+    global WITH_TAGS
+    WITH_TAGS=args.tags
     # set logging config
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
